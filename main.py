@@ -3,7 +3,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font
 
 # Lee el archivo CSV
-df = pd.read_csv(r'C:\Users\Asus\Downloads\Users25-06.csv')
+df = pd.read_csv(r'C:\Users\Asus\Downloads\Users (48).csv')
 
 # Muestra los nombres de las columnas y las primeras filas del DataFrame
 print("Nombres de las columnas en el archivo CSV:")
