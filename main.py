@@ -1,88 +1,93 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font
+from datetime import datetime
+import os
 
-# Lee el archivo CSV
-df = pd.read_csv(r'C:\Users\Asus\Downloads\Users (48).csv')
+def adjuntar_archivo():
+    archivo = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+    if archivo:
+        entry_archivo.delete(0, tk.END)
+        entry_archivo.insert(0, archivo)
 
-# Muestra los nombres de las columnas y las primeras filas del DataFrame
-print("Nombres de las columnas en el archivo CSV:")
-print(df.columns)
-print("\nPrimeras filas del DataFrame original:")
-print(df.head())
+def generar_informe():
+    ruta_csv = entry_archivo.get()
+    if not ruta_csv:
+        messagebox.showwarning("Advertencia", "Por favor, adjunta un archivo CSV.")
+        return
 
-# Lista de columnas deseadas
-columnas_deseadas = [
-    'active', 'name.familyName', 'name.givenName', 'userName',
-    'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:division',
-    'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber',
-    'urn:ietf:params:scim:schemas:extension:sap:2.0:User:loginTime', 'emails[0].value'
-]
+    try:
+        df = pd.read_csv(ruta_csv)
+        
+        columnas_deseadas = [
+            'active', 'name.familyName', 'name.givenName', 'userName',
+            'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:division',
+            'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber',
+            'urn:ietf:params:scim:schemas:extension:sap:2.0:User:loginTime', 'emails[0].value'
+        ]
 
-# Verifica que las columnas deseadas existen en el DataFrame
-columnas_existentes = [col for col in columnas_deseadas if col in df.columns]
-print("\nColumnas seleccionadas que existen en el DataFrame:")
-print(columnas_existentes)
+        columnas_existentes = [col for col in columnas_deseadas if col in df.columns]
+        df_reducido = df[columnas_existentes]
 
-# Selecciona solo las columnas deseadas que existen
-df_reducido = df[columnas_existentes]
+        nuevos_nombres = {
+            'active': 'Estado',
+            'name.familyName': 'Apellido',
+            'name.givenName': 'Nombre',
+            'userName': 'Usuario',
+            'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:division': 'Gerencia',
+            'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber': 'Area',
+            'urn:ietf:params:scim:schemas:extension:sap:2.0:User:loginTime': 'Hora de conexion',
+            'emails[0].value': 'correo'
+        }
 
-# Renombra las columnas
-nuevos_nombres = {
-    'active': 'Estado',
-    'name.familyName': 'Apellido',
-    'name.givenName': 'Nombre',
-    'userName': 'Usuario',
-    'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:division': 'Gerencia',
-    'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber': 'Area',
-    'urn:ietf:params:scim:schemas:extension:sap:2.0:User:loginTime': 'Hora de conexion',
-    'emails[0].value': 'correo'
-}
+        df_reducido.rename(columns=nuevos_nombres, inplace=True)
 
-df_reducido.rename(columns=nuevos_nombres, inplace=True)
+        df_reducido = df_reducido[df_reducido['Estado'] == True]
+        df_reducido['Estado'] = 'ACTIVO'
+        df_reducido = df_reducido[df_reducido['correo'].str.contains('@mallplaza.com', na=False)]
+        df_reducido['Hora de conexion'] = pd.to_datetime(df_reducido['Hora de conexion'], errors='coerce').dt.strftime('%Y-%m-%d %H:%M:%S')
 
-# Muestra una muestra de las primeras filas del DataFrame reducido
-print("\nPrimeras filas del DataFrame reducido (antes del filtrado):")
-print(df_reducido.head())
+        # Generar nombre del archivo con la fecha de hoy
+        fecha_hoy = datetime.today().strftime('%d-%m-%Y')
+        nombre_archivo = f"Conexion-Usuarios {fecha_hoy}.xlsx"
+        ruta_guardado = os.path.join(r"C:\Users\Asus\Documents\Conexion Usuarios\Julio", nombre_archivo)
+        
+        df_reducido.to_excel(ruta_guardado, index=False, engine='openpyxl')
 
-# Verificar los valores únicos de 'Estado'
-print("\nValores únicos de 'Estado' antes del filtrado:")
-print(df_reducido['Estado'].unique())
+        wb = load_workbook(ruta_guardado)
+        ws = wb.active
 
-# Filtrar por 'Estado' y cambiar True a "ACTIVO"
-df_reducido = df_reducido[df_reducido['Estado'] == True]
-df_reducido['Estado'] = 'ACTIVO'
+        relleno_verde = PatternFill(start_color="5ccb5f", end_color="5ccb5f", fill_type="solid")
+        fuente_blanca = Font(color="FFFFFF")
 
-# Verificar los valores únicos de 'correo' que contienen '@mallplaza.com'
-print("\nValores únicos de 'correo' que contienen '@mallplaza.com':")
-print(df_reducido[df_reducido['correo'].str.contains('@mallplaza.com', na=False)]['correo'].unique())
+        for cell in ws[1]:
+            cell.fill = relleno_verde
+            cell.font = fuente_blanca
 
-# Filtrar por correos que contengan "@mallplaza.com"
-df_reducido = df_reducido[df_reducido['correo'].str.contains('@mallplaza.com', na=False)]
+        wb.save(ruta_guardado)
+        messagebox.showinfo("Éxito", f"Informe generado exitosamente en {ruta_guardado}")
 
-# Formatear la columna 'Hora de conexion' a formato de fecha y hora
-df_reducido['Hora de conexion'] = pd.to_datetime(df_reducido['Hora de conexion'], errors='coerce').dt.strftime('%Y-%m-%d %H:%M:%S')
+    except Exception as e:
+        messagebox.showerror("Error", f"Ocurrió un error al procesar el archivo: {e}")
 
-# Guarda el DataFrame reducido en un nuevo archivo Excel
-ruta_excel = r'C:\Users\Asus\Downloads\ReporteConexion2 5-06.xlsx'
-df_reducido.to_excel(ruta_excel, index=False, engine='openpyxl')
+root = tk.Tk()
+root.title("Informe Usuarios SAP BTP")
 
-# Aplicar formato al encabezado
-wb = load_workbook(ruta_excel)
-ws = wb.active
+frame = tk.Frame(root, padx=10, pady=10)
+frame.pack(padx=10, pady=10)    
 
-# Definir el estilo de relleno verde y la fuente blanca
-relleno_verde = PatternFill(start_color="5ccb5f", end_color="5ccb5f", fill_type="solid")
-fuente_blanca = Font(color="FFFFFF")
+label_archivo = tk.Label(frame, text="Archivo")
+label_archivo.grid(row=0, column=0, sticky=tk.W, pady=5)
 
-# Aplicar el estilo al encabezado
-for cell in ws[1]:
-    cell.fill = relleno_verde
-    cell.font = fuente_blanca
+entry_archivo = tk.Entry(frame, width=50)
+entry_archivo.grid(row=0, column=1, pady=5)
 
-# Guardar el archivo Excel con el formato aplicado
-wb.save(ruta_excel)
+button_adjuntar = tk.Button(frame, text="Adjuntar", command=adjuntar_archivo)
+button_adjuntar.grid(row=0, column=2, padx=5, pady=5)
 
-# Muestra las primeras filas del DataFrame reducido
-print("\nPrimeras filas del DataFrame reducido (después del filtrado):")
-print(df_reducido.head())
+button_enviar = tk.Button(frame, text="Enviar", command=generar_informe)
+button_enviar.grid(row=1, columnspan=3, pady=10)
+
+root.mainloop()
